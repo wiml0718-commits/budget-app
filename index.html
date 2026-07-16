@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="記帳">
+<title>記帳程式</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="daily">每日記帳</button>
+    <button class="tab-btn" data-tab="travel">旅遊基金</button>
+  </nav>
+
+  <section id="daily" class="tab-panel active">
+    <div class="card balance-card">
+      <div class="balance-label" id="balanceLabel">本月累積額度</div>
+      <div id="balanceAmount" class="balance-amount">0</div>
+      <div id="balanceDetail" class="balance-detail"></div>
+    </div>
+
+    <div class="card balance-card">
+      <div class="balance-label" id="mealBalanceLabel">本月大餐額度</div>
+      <div id="mealBalanceAmount" class="balance-amount meal">0</div>
+      <div id="mealBalanceDetail" class="balance-detail"></div>
+    </div>
+
+    <div class="card">
+      <h2>設定</h2>
+      <div class="form-row">
+        <label>每日額度
+          <input type="number" id="dailyAllowanceInput" step="1" min="0">
+        </label>
+        <label>起始日期
+          <input type="date" id="startDateInput">
+        </label>
+        <label>每月大餐額度
+          <input type="number" id="mealBudgetInput" step="1" min="0">
+        </label>
+        <button id="saveSettingsBtn">儲存設定</button>
+      </div>
+      <p class="hint-text">每月額度都會在每月 1 號重新計算，不會累積到下個月（起始月份依起始日期算部分天數）。</p>
+    </div>
+
+    <div class="card">
+      <h2>新增花費</h2>
+      <form id="expenseForm">
+        <div class="form-row">
+          <label>日期
+            <input type="date" id="expenseDate" required>
+          </label>
+          <label>金額
+            <input type="number" id="expenseAmount" step="1" min="0" required>
+          </label>
+          <label>備註
+            <input type="text" id="expenseNote" placeholder="選填">
+          </label>
+        </div>
+        <div class="category-block">
+          <span class="category-block-label">類別</span>
+          <span class="category-toggle">
+            <label><input type="radio" name="expenseCategory" value="daily" checked> 一般花費</label>
+            <label><input type="radio" name="expenseCategory" value="meal"> 大餐</label>
+          </span>
+        </div>
+        <button type="submit" class="submit-btn">新增</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="calendar-header">
+        <button id="prevMonthBtn" class="cal-nav-btn" type="button">‹</button>
+        <h2 id="calendarTitle"></h2>
+        <button id="nextMonthBtn" class="cal-nav-btn" type="button">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="selectedDayLabel">當天花費</h2>
+      <ul id="expenseList" class="record-list"></ul>
+    </div>
+  </section>
+
+  <section id="travel" class="tab-panel">
+    <div class="card balance-card">
+      <div class="balance-label">旅遊基金累積總額</div>
+      <div id="travelTotal" class="balance-amount travel">0</div>
+    </div>
+
+    <div class="card">
+      <h2>新增紀錄</h2>
+      <form id="travelForm" class="form-row">
+        <label>日期
+          <input type="date" id="travelDate" required>
+        </label>
+        <label>金額
+          <input type="number" id="travelAmount" step="1" min="0" required>
+        </label>
+        <label>備註
+          <input type="text" id="travelNote" placeholder="選填">
+        </label>
+        <button type="submit">新增</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>基金紀錄</h2>
+      <ul id="travelList" class="record-list"></ul>
+    </div>
+  </section>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
