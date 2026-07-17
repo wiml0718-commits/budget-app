@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="記帳">
 <title>記帳程式</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <div class="app">
@@ -113,6 +113,12 @@
           <button type="button" id="shiftResetBtn" class="shift-btn shift-reset">還原自動</button>
         </span>
       </div>
+      <div class="shift-control">
+        <span id="mealCreditLabel" class="shift-status-label"></span>
+        <span class="shift-toggle">
+          <button type="button" id="selfCookBtn" class="shift-btn">標記自己煮（半額）</button>
+        </span>
+      </div>
       <ul id="expenseList" class="record-list"></ul>
     </div>
   </section>
@@ -145,6 +151,6 @@
     </div>
   </section>
 </div>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
