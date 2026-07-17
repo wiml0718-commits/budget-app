@@ -60,6 +60,37 @@ body {
   color: #555;
 }
 
+.settings-card summary {
+  font-size: 15px;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-card summary::after {
+  content: '▸';
+  float: right;
+  color: #999;
+  transition: transform 0.15s;
+}
+
+.settings-card[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.settings-card[open] summary {
+  margin-bottom: 12px;
+}
+
+.settings-card .form-row + .form-row {
+  margin-top: 10px;
+}
+
 .balance-card {
   text-align: center;
 }

@@ -118,14 +118,17 @@ function formatRangeLabel(range) {
   return `${s}～${e}`;
 }
 
-// Billable range within the pay period containing today, clamped to [startDate, today].
+// Billable range within the pay period containing today, clamped to [startDate, yesterday].
+// Today itself isn't counted yet — a day's spending only locks in once it's over.
 function getBillableRange(startDate, payday) {
   const today = new Date(todayStr() + 'T00:00:00');
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
   const period = getPeriodForDate(todayStr(), payday);
   const start = new Date(startDate + 'T00:00:00');
 
   const effectiveStart = start > period.start ? start : period.start;
-  const effectiveEnd = today < period.end ? today : period.end;
+  const effectiveEnd = yesterday < period.end ? yesterday : period.end;
   if (effectiveStart > effectiveEnd) return null;
 
   return { start: effectiveStart, end: effectiveEnd };
@@ -282,7 +285,7 @@ function renderDaily() {
   balanceLabelEl.textContent = `本期累積額度（${formatRangeLabel(period)}）`;
   balanceAmountEl.textContent = formatMoney(balance);
   balanceAmountEl.classList.toggle('negative', balance < 0);
-  balanceDetailEl.textContent = `已累積 ${days} 天（上班 ${workDays} 天 x $${settings.workAllowance} + 休假 ${offDays} 天 x $${settings.offAllowance}）= $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
+  balanceDetailEl.textContent = `已累積至前一天共 ${days} 天（上班 ${workDays} 天 x $${settings.workAllowance} + 休假 ${offDays} 天 x $${settings.offAllowance}）= $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
 
   const mealSpent = periodExpenses
     .filter((e) => (e.category || 'daily') === 'meal')
@@ -292,26 +295,34 @@ function renderDaily() {
   mealBalanceLabelEl.textContent = `本期大餐額度（${formatRangeLabel(period)}）`;
   mealBalanceAmountEl.textContent = formatMoney(mealBalance);
   mealBalanceAmountEl.classList.toggle('negative', mealBalance < 0);
-  mealBalanceDetailEl.textContent = `本期額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費 $${formatMoney(mealSpent)}`;
+  mealBalanceDetailEl.textContent = `本期額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費（至前一天）$${formatMoney(mealSpent)}`;
 
-  const prevPeriod = getPreviousPeriodRange(settings.payday);
-  const prevExpenses = expensesInRange(expenses, prevPeriod);
-  const prevDailySpent = prevExpenses
-    .filter((e) => (e.category || 'daily') !== 'meal')
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-  const prevAllowance = sumAllowanceForRange(prevPeriod, settings, overrides);
-  const prevBalance = prevAllowance.total - prevDailySpent;
-  prevPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevBalance)}`;
-  prevPeriodInfoEl.classList.toggle('negative', prevBalance < 0);
-  prevPeriodInfoEl.classList.toggle('positive', prevBalance >= 0);
+  const isPayday = toDateStr(period.start) === todayStr();
+  prevPeriodInfoEl.textContent = '';
+  prevPeriodInfoEl.classList.remove('negative', 'positive');
+  prevMealPeriodInfoEl.textContent = '';
+  prevMealPeriodInfoEl.classList.remove('negative', 'positive');
 
-  const prevMealSpent = prevExpenses
-    .filter((e) => (e.category || 'daily') === 'meal')
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-  const prevMealBalance = Number(settings.mealBudget || 0) - prevMealSpent;
-  prevMealPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevMealBalance)}`;
-  prevMealPeriodInfoEl.classList.toggle('negative', prevMealBalance < 0);
-  prevMealPeriodInfoEl.classList.toggle('positive', prevMealBalance >= 0);
+  if (isPayday) {
+    const prevPeriod = getPreviousPeriodRange(settings.payday);
+    const prevExpenses = expensesInRange(expenses, prevPeriod);
+    const prevDailySpent = prevExpenses
+      .filter((e) => (e.category || 'daily') !== 'meal')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+    const prevAllowance = sumAllowanceForRange(prevPeriod, settings, overrides);
+    const prevBalance = prevAllowance.total - prevDailySpent;
+    prevPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevBalance)}`;
+    prevPeriodInfoEl.classList.toggle('negative', prevBalance < 0);
+    prevPeriodInfoEl.classList.toggle('positive', prevBalance >= 0);
+
+    const prevMealSpent = prevExpenses
+      .filter((e) => (e.category || 'daily') === 'meal')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+    const prevMealBalance = Number(settings.mealBudget || 0) - prevMealSpent;
+    prevMealPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevMealBalance)}`;
+    prevMealPeriodInfoEl.classList.toggle('negative', prevMealBalance < 0);
+    prevMealPeriodInfoEl.classList.toggle('positive', prevMealBalance >= 0);
+  }
 
   renderCalendar(expenses, settings, overrides);
 
