@@ -57,7 +57,7 @@ function getMealSlotCount(dayType) {
   return dayType === 'work' ? 1 : 2;
 }
 
-// Each slot is 'general' | 'selfcook' | 'meal'. Defaults to all-general when unset,
+// Each slot is 'general' | 'meal'. Defaults to all-general when unset,
 // or when a day-type override changed the slot count since it was last saved.
 function getMealSlots(dateStr, dayType, mealSlotOverrides) {
   const count = getMealSlotCount(dayType);
@@ -133,31 +133,18 @@ function formatRangeLabel(range) {
   return `${s}～${e}`;
 }
 
-function getRangeUpTo(startDate, payday, endLimit) {
+// Billable range within the pay period containing today, clamped to [startDate, today].
+// Real-time — includes whatever has been logged for today so far.
+function getBillableRange(startDate, payday) {
+  const today = new Date(todayStr() + 'T00:00:00');
   const period = getPeriodForDate(todayStr(), payday);
   const start = new Date(startDate + 'T00:00:00');
 
   const effectiveStart = start > period.start ? start : period.start;
-  const effectiveEnd = endLimit < period.end ? endLimit : period.end;
+  const effectiveEnd = today < period.end ? today : period.end;
   if (effectiveStart > effectiveEnd) return null;
 
   return { start: effectiveStart, end: effectiveEnd };
-}
-
-// Billable range within the pay period containing today, clamped to [startDate, yesterday].
-// Today itself isn't counted yet here — a day's spending only locks in once it's over.
-// This is the "official" balance shown as the headline figure.
-function getBillableRange(startDate, payday) {
-  const today = new Date(todayStr() + 'T00:00:00');
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  return getRangeUpTo(startDate, payday, yesterday);
-}
-
-// Same as getBillableRange but includes today — a live preview, not the locked-in figure.
-function getRealtimeRange(startDate, payday) {
-  const today = new Date(todayStr() + 'T00:00:00');
-  return getRangeUpTo(startDate, payday, today);
 }
 
 function expensesInRange(expenses, range) {
@@ -168,7 +155,7 @@ function expensesInRange(expenses, range) {
 }
 
 // Only meal slots marked 'general' contribute their per-meal share of the
-// day's rate; 'selfcook' and 'meal' slots contribute nothing to this pool
+// day's rate; 'meal' slots contribute nothing to this pool
 // (a 大餐 slot's actual cost is tracked separately against the meal budget).
 function dayAllowanceCredit(dateStr, dayType, settings, mealSlotOverrides) {
   const dayRate = dayType === 'work' ? Number(settings.workAllowance || 0) : Number(settings.offAllowance || 0);
@@ -221,12 +208,10 @@ const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const balanceLabelEl = document.getElementById('balanceLabel');
 const balanceAmountEl = document.getElementById('balanceAmount');
 const balanceDetailEl = document.getElementById('balanceDetail');
-const realtimeInfoEl = document.getElementById('realtimeInfo');
 const prevPeriodInfoEl = document.getElementById('prevPeriodInfo');
 const mealBalanceLabelEl = document.getElementById('mealBalanceLabel');
 const mealBalanceAmountEl = document.getElementById('mealBalanceAmount');
 const mealBalanceDetailEl = document.getElementById('mealBalanceDetail');
-const realtimeMealInfoEl = document.getElementById('realtimeMealInfo');
 const prevMealPeriodInfoEl = document.getElementById('prevMealPeriodInfo');
 const expenseForm = document.getElementById('expenseForm');
 const expenseDate = document.getElementById('expenseDate');
@@ -324,39 +309,20 @@ function renderDaily() {
     .reduce((sum, e) => sum + Number(e.amount), 0);
   const balance = totalAllowance - dailySpent;
 
-  balanceLabelEl.textContent = `本期累積額度（${formatRangeLabel(period)}）`;
+  balanceLabelEl.textContent = `本期即時總結（${formatRangeLabel(period)}）`;
   balanceAmountEl.textContent = formatMoney(balance);
   balanceAmountEl.classList.toggle('negative', balance < 0);
-  balanceDetailEl.textContent = `已累積至前一天共 ${days} 天（上班 ${workDays} 天 x $${settings.workAllowance} + 休假 ${offDays} 天 x $${settings.offAllowance}）= $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
+  balanceDetailEl.textContent = `已累積（含今日）共 ${days} 天（上班 ${workDays} 天 x $${settings.workAllowance} + 休假 ${offDays} 天 x $${settings.offAllowance}）= $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
 
   const mealSpent = periodExpenses
     .filter((e) => (e.category || 'daily') === 'meal')
     .reduce((sum, e) => sum + Number(e.amount), 0);
   const mealBalance = Number(settings.mealBudget || 0) - mealSpent;
 
-  mealBalanceLabelEl.textContent = `本期大餐額度（${formatRangeLabel(period)}）`;
+  mealBalanceLabelEl.textContent = `本期大餐即時總結（${formatRangeLabel(period)}）`;
   mealBalanceAmountEl.textContent = formatMoney(mealBalance);
   mealBalanceAmountEl.classList.toggle('negative', mealBalance < 0);
-  mealBalanceDetailEl.textContent = `本期額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費（至前一天）$${formatMoney(mealSpent)}`;
-
-  const realtimeRange = getRealtimeRange(settings.startDate, settings.payday);
-  const realtimeExpenses = expensesInRange(expenses, realtimeRange);
-  const realtimeAllowance = sumAllowanceForRange(realtimeRange, settings, overrides, mealSlotOverrides);
-  const realtimeDailySpent = realtimeExpenses
-    .filter((e) => (e.category || 'daily') !== 'meal')
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-  const realtimeBalance = realtimeAllowance.total - realtimeDailySpent;
-  realtimeInfoEl.textContent = `即時總結（含今日）：$${formatMoney(realtimeBalance)}`;
-  realtimeInfoEl.classList.toggle('negative', realtimeBalance < 0);
-  realtimeInfoEl.classList.toggle('positive', realtimeBalance >= 0);
-
-  const realtimeMealSpent = realtimeExpenses
-    .filter((e) => (e.category || 'daily') === 'meal')
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-  const realtimeMealBalance = Number(settings.mealBudget || 0) - realtimeMealSpent;
-  realtimeMealInfoEl.textContent = `即時總結（含今日）：$${formatMoney(realtimeMealBalance)}`;
-  realtimeMealInfoEl.classList.toggle('negative', realtimeMealBalance < 0);
-  realtimeMealInfoEl.classList.toggle('positive', realtimeMealBalance >= 0);
+  mealBalanceDetailEl.textContent = `本期額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費（含今日）$${formatMoney(mealSpent)}`;
 
   const isPayday = toDateStr(period.start) === todayStr();
   prevPeriodInfoEl.textContent = '';
@@ -464,7 +430,7 @@ shiftResetBtn.addEventListener('click', () => {
   renderDaily();
 });
 
-const mealSlotTypeLabels = { general: '一般消費', selfcook: '自己煮', meal: '大餐' };
+const mealSlotTypeLabels = { general: '一般消費', meal: '大餐' };
 
 function renderMealSlots(dateStr, dayType, settings, mealSlotOverrides) {
   const slots = getMealSlots(dateStr, dayType, mealSlotOverrides);
@@ -480,7 +446,7 @@ function renderMealSlots(dateStr, dayType, settings, mealSlotOverrides) {
     row.innerHTML = `
       <span class="meal-slot-label">第${idx + 1}餐</span>
       <span class="meal-slot-toggle">
-        ${['general', 'selfcook', 'meal']
+        ${['general', 'meal']
           .map(
             (value) =>
               `<label><input type="radio" name="${groupName}" value="${value}" ${slotType === value ? 'checked' : ''}> ${mealSlotTypeLabels[value]}</label>`

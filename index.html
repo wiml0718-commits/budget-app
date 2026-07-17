@@ -49,22 +49,20 @@
         </span>
       </div>
       <button id="saveSettingsBtn" class="submit-btn">儲存設定</button>
-      <p class="hint-text">額度以發薪日為週期重新計算，不會累積到下一期（第一期依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。上班日算 1 餐、休假日算 2 餐，點月曆選日期後可逐餐標記「一般消費/自己煮/大餐」，只有一般消費的餐次會累加進額度；實際花費仍需在下方另外新增並選對類別。額度計算至前一天，當天新增的花費隔天才會反映。</p>
+      <p class="hint-text">額度以發薪日為週期重新計算，不會累積到下一期（第一期依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。上班日算 1 餐、休假日算 2 餐，點月曆選日期後可逐餐標記「一般消費/大餐」，只有一般消費的餐次會累加進額度；實際花費仍需在下方另外新增並選對類別。額度即時計算，包含當天已新增的花費。</p>
     </details>
 
     <div class="card balance-card">
-      <div class="balance-label" id="balanceLabel">本期累積額度</div>
+      <div class="balance-label" id="balanceLabel">本期即時總結</div>
       <div id="balanceAmount" class="balance-amount">0</div>
       <div id="balanceDetail" class="balance-detail"></div>
-      <div id="realtimeInfo" class="prev-period-info"></div>
       <div id="prevPeriodInfo" class="prev-period-info"></div>
     </div>
 
     <div class="card balance-card">
-      <div class="balance-label" id="mealBalanceLabel">本期大餐額度</div>
+      <div class="balance-label" id="mealBalanceLabel">本期大餐即時總結</div>
       <div id="mealBalanceAmount" class="balance-amount meal">0</div>
       <div id="mealBalanceDetail" class="balance-detail"></div>
-      <div id="realtimeMealInfo" class="prev-period-info"></div>
       <div id="prevMealPeriodInfo" class="prev-period-info"></div>
     </div>
 
@@ -151,6 +149,6 @@
     </div>
   </section>
 </div>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
