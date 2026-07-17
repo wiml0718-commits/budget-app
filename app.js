@@ -368,6 +368,8 @@ nextMonthBtn.addEventListener('click', () => {
   renderDaily();
 });
 
+const settingsCard = document.querySelector('.settings-card');
+
 saveSettingsBtn.addEventListener('click', () => {
   const payday = Math.min(31, Math.max(1, Number(paydayInput.value || 1)));
   saveSettings({
@@ -380,6 +382,7 @@ saveSettingsBtn.addEventListener('click', () => {
     shiftAnchorType: document.querySelector('input[name="shiftAnchorType"]:checked').value,
   });
   renderDaily();
+  settingsCard.open = false;
 });
 
 function setDayOverride(dateStr, type) {
