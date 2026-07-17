@@ -216,6 +216,7 @@ const prevMealPeriodInfoEl = document.getElementById('prevMealPeriodInfo');
 const expenseForm = document.getElementById('expenseForm');
 const expenseFormTitle = document.getElementById('expenseFormTitle');
 const calcDisplayEl = document.getElementById('calcDisplay');
+const calcKeysEl = document.getElementById('calcKeys');
 const expenseNote = document.getElementById('expenseNote');
 const expenseList = document.getElementById('expenseList');
 const calendarTitle = document.getElementById('calendarTitle');
@@ -293,6 +294,7 @@ function calcEquals() {
     calcWaitingForOperand = true;
     calcUpdateDisplay();
   }
+  calcKeysEl.classList.remove('open');
 }
 
 function calcClear() {
@@ -301,7 +303,12 @@ function calcClear() {
   calcPendingOp = null;
   calcWaitingForOperand = false;
   calcUpdateDisplay();
+  calcKeysEl.classList.remove('open');
 }
+
+calcDisplayEl.addEventListener('click', () => {
+  calcKeysEl.classList.toggle('open');
+});
 
 function calcBackspace() {
   calcDisplay = calcDisplay.length > 1 ? calcDisplay.slice(0, -1) : '0';

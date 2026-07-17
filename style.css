@@ -344,12 +344,17 @@ body {
   margin-bottom: 8px;
   overflow-x: auto;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .calc-keys {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
+}
+
+.calc-keys.open {
+  display: grid;
 }
 
 .calc-key {
