@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="記帳">
 <title>記帳程式</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <div class="app">
@@ -67,15 +67,44 @@
     </div>
 
     <div class="card">
-      <h2>新增花費</h2>
+      <div class="calendar-header">
+        <button id="prevMonthBtn" class="cal-nav-btn" type="button">‹</button>
+        <h2 id="calendarTitle"></h2>
+        <button id="nextMonthBtn" class="cal-nav-btn" type="button">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="expenseFormTitle">新增花費</h2>
       <form id="expenseForm">
+        <div class="calc">
+          <div class="calc-display" id="calcDisplay">0</div>
+          <div class="calc-keys">
+            <button type="button" class="calc-key" data-key="7">7</button>
+            <button type="button" class="calc-key" data-key="8">8</button>
+            <button type="button" class="calc-key" data-key="9">9</button>
+            <button type="button" class="calc-key" data-key="4">4</button>
+            <button type="button" class="calc-key" data-key="5">5</button>
+            <button type="button" class="calc-key" data-key="6">6</button>
+            <button type="button" class="calc-key" data-key="1">1</button>
+            <button type="button" class="calc-key" data-key="2">2</button>
+            <button type="button" class="calc-key" data-key="3">3</button>
+            <button type="button" class="calc-key" data-key="0">0</button>
+            <button type="button" class="calc-key" data-key=".">.</button>
+            <button type="button" class="calc-key calc-key-eq" data-key="=">=</button>
+            <button type="button" class="calc-key calc-key-op" data-key="+">+</button>
+            <button type="button" class="calc-key calc-key-op" data-key="−">−</button>
+            <button type="button" class="calc-key calc-key-op" data-key="×">×</button>
+            <button type="button" class="calc-key calc-key-op" data-key="÷">÷</button>
+            <button type="button" class="calc-key calc-key-clear" data-key="C">C</button>
+            <button type="button" class="calc-key calc-key-clear" data-key="⌫">⌫</button>
+          </div>
+        </div>
         <div class="form-row">
-          <label>日期
-            <input type="date" id="expenseDate" required>
-          </label>
-          <label>金額
-            <input type="number" id="expenseAmount" step="1" min="0" required>
-          </label>
           <label>備註
             <input type="text" id="expenseNote" placeholder="選填">
           </label>
@@ -101,18 +130,6 @@
         <span id="mealCreditLabel" class="shift-status-label"></span>
       </div>
       <div id="mealSlotsContainer" class="meal-slots"></div>
-    </div>
-
-    <div class="card">
-      <div class="calendar-header">
-        <button id="prevMonthBtn" class="cal-nav-btn" type="button">‹</button>
-        <h2 id="calendarTitle"></h2>
-        <button id="nextMonthBtn" class="cal-nav-btn" type="button">›</button>
-      </div>
-      <div class="calendar-weekdays">
-        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-      </div>
-      <div id="calendarGrid" class="calendar-grid"></div>
     </div>
 
     <div class="card">
@@ -149,6 +166,6 @@
     </div>
   </section>
 </div>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

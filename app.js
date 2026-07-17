@@ -214,8 +214,8 @@ const mealBalanceAmountEl = document.getElementById('mealBalanceAmount');
 const mealBalanceDetailEl = document.getElementById('mealBalanceDetail');
 const prevMealPeriodInfoEl = document.getElementById('prevMealPeriodInfo');
 const expenseForm = document.getElementById('expenseForm');
-const expenseDate = document.getElementById('expenseDate');
-const expenseAmount = document.getElementById('expenseAmount');
+const expenseFormTitle = document.getElementById('expenseFormTitle');
+const calcDisplayEl = document.getElementById('calcDisplay');
 const expenseNote = document.getElementById('expenseNote');
 const expenseList = document.getElementById('expenseList');
 const calendarTitle = document.getElementById('calendarTitle');
@@ -229,6 +229,96 @@ const shiftOffBtn = document.getElementById('shiftOffBtn');
 const shiftResetBtn = document.getElementById('shiftResetBtn');
 const mealCreditLabel = document.getElementById('mealCreditLabel');
 const mealSlotsContainer = document.getElementById('mealSlotsContainer');
+
+// ---- Calculator (amount entry) ----
+let calcDisplay = '0';
+let calcAccumulator = null;
+let calcPendingOp = null;
+let calcWaitingForOperand = false;
+
+function calcUpdateDisplay() {
+  calcDisplayEl.textContent = calcDisplay;
+}
+
+function calcCompute(a, op, b) {
+  switch (op) {
+    case '+': return a + b;
+    case '−': return a - b;
+    case '×': return a * b;
+    case '÷': return b === 0 ? 0 : a / b;
+    default: return b;
+  }
+}
+
+function calcInputDigit(digit) {
+  if (calcWaitingForOperand) {
+    calcDisplay = digit;
+    calcWaitingForOperand = false;
+  } else {
+    calcDisplay = calcDisplay === '0' ? digit : calcDisplay + digit;
+  }
+  calcUpdateDisplay();
+}
+
+function calcInputDot() {
+  if (calcWaitingForOperand) {
+    calcDisplay = '0.';
+    calcWaitingForOperand = false;
+  } else if (!calcDisplay.includes('.')) {
+    calcDisplay += '.';
+  }
+  calcUpdateDisplay();
+}
+
+function calcInputOperator(op) {
+  const inputValue = parseFloat(calcDisplay);
+  if (calcAccumulator === null) {
+    calcAccumulator = inputValue;
+  } else if (!calcWaitingForOperand) {
+    calcAccumulator = calcCompute(calcAccumulator, calcPendingOp, inputValue);
+    calcDisplay = String(calcAccumulator);
+  }
+  calcPendingOp = op;
+  calcWaitingForOperand = true;
+  calcUpdateDisplay();
+}
+
+function calcEquals() {
+  if (calcPendingOp !== null && !calcWaitingForOperand) {
+    const inputValue = parseFloat(calcDisplay);
+    calcAccumulator = calcCompute(calcAccumulator, calcPendingOp, inputValue);
+    calcDisplay = String(calcAccumulator);
+    calcPendingOp = null;
+    calcAccumulator = null;
+    calcWaitingForOperand = true;
+    calcUpdateDisplay();
+  }
+}
+
+function calcClear() {
+  calcDisplay = '0';
+  calcAccumulator = null;
+  calcPendingOp = null;
+  calcWaitingForOperand = false;
+  calcUpdateDisplay();
+}
+
+function calcBackspace() {
+  calcDisplay = calcDisplay.length > 1 ? calcDisplay.slice(0, -1) : '0';
+  calcUpdateDisplay();
+}
+
+document.querySelectorAll('.calc-key').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.key;
+    if (/^[0-9]$/.test(key)) calcInputDigit(key);
+    else if (key === '.') calcInputDot();
+    else if (['+', '−', '×', '÷'].includes(key)) calcInputOperator(key);
+    else if (key === '=') calcEquals();
+    else if (key === 'C') calcClear();
+    else if (key === '⌫') calcBackspace();
+  });
+});
 
 let selectedDate = todayStr();
 let calendarMonth = new Date(`${selectedDate}T00:00:00`);
@@ -279,7 +369,6 @@ function renderCalendar(expenses, settings, overrides) {
 
     cell.addEventListener('click', () => {
       selectedDate = dateStr;
-      expenseDate.value = dateStr;
       renderDaily();
     });
     calendarGrid.appendChild(cell);
@@ -352,6 +441,8 @@ function renderDaily() {
   }
 
   renderCalendar(expenses, settings, overrides);
+
+  expenseFormTitle.textContent = `新增花費（${selectedDate}）`;
 
   const selectedType = getDayType(selectedDate, settings, overrides);
   const isOverridden = Boolean(overrides[selectedDate]);
@@ -469,21 +560,22 @@ function renderMealSlots(dateStr, dayType, settings, mealSlotOverrides) {
 
 expenseForm.addEventListener('submit', (evt) => {
   evt.preventDefault();
+  calcEquals();
+  const amount = Math.max(0, parseFloat(calcDisplay) || 0);
+  if (amount <= 0) return;
+
   const category = document.querySelector('input[name="expenseCategory"]:checked').value;
   const records = loadRecords(STORAGE_KEYS.expenses);
   records.push({
     id: crypto.randomUUID(),
-    date: expenseDate.value,
-    amount: Number(expenseAmount.value),
+    date: selectedDate,
+    amount,
     note: expenseNote.value.trim(),
     category,
   });
   saveRecords(STORAGE_KEYS.expenses, records);
-  selectedDate = expenseDate.value;
-  calendarMonth = new Date(`${selectedDate}T00:00:00`);
-  calendarMonth.setDate(1);
   expenseForm.reset();
-  expenseDate.value = selectedDate;
+  calcClear();
   renderDaily();
 });
 
@@ -543,7 +635,6 @@ travelForm.addEventListener('submit', (evt) => {
 });
 
 // ---- Init ----
-expenseDate.value = todayStr();
 travelDate.value = todayStr();
 renderDaily();
 renderTravel();
