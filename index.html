@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="記帳">
 <title>記帳程式</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div class="app">
@@ -89,6 +89,18 @@
         </div>
         <button type="submit" class="submit-btn">新增</button>
       </form>
+      <div class="shift-control">
+        <span id="shiftStatusLabel" class="shift-status-label"></span>
+        <span class="shift-toggle">
+          <button type="button" id="shiftWorkBtn" class="shift-btn">設為上班</button>
+          <button type="button" id="shiftOffBtn" class="shift-btn">設為休假</button>
+          <button type="button" id="shiftResetBtn" class="shift-btn shift-reset">還原自動</button>
+        </span>
+      </div>
+      <div class="shift-control">
+        <span id="mealCreditLabel" class="shift-status-label"></span>
+      </div>
+      <div id="mealSlotsContainer" class="meal-slots"></div>
     </div>
 
     <div class="card">
@@ -105,18 +117,6 @@
 
     <div class="card">
       <h2 id="selectedDayLabel">當天花費</h2>
-      <div class="shift-control">
-        <span id="shiftStatusLabel" class="shift-status-label"></span>
-        <span class="shift-toggle">
-          <button type="button" id="shiftWorkBtn" class="shift-btn">設為上班</button>
-          <button type="button" id="shiftOffBtn" class="shift-btn">設為休假</button>
-          <button type="button" id="shiftResetBtn" class="shift-btn shift-reset">還原自動</button>
-        </span>
-      </div>
-      <div class="shift-control">
-        <span id="mealCreditLabel" class="shift-status-label"></span>
-      </div>
-      <div id="mealSlotsContainer" class="meal-slots"></div>
       <ul id="expenseList" class="record-list"></ul>
     </div>
   </section>
