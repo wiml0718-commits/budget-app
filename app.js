@@ -133,20 +133,31 @@ function formatRangeLabel(range) {
   return `${s}～${e}`;
 }
 
-// Billable range within the pay period containing today, clamped to [startDate, yesterday].
-// Today itself isn't counted yet — a day's spending only locks in once it's over.
-function getBillableRange(startDate, payday) {
-  const today = new Date(todayStr() + 'T00:00:00');
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+function getRangeUpTo(startDate, payday, endLimit) {
   const period = getPeriodForDate(todayStr(), payday);
   const start = new Date(startDate + 'T00:00:00');
 
   const effectiveStart = start > period.start ? start : period.start;
-  const effectiveEnd = yesterday < period.end ? yesterday : period.end;
+  const effectiveEnd = endLimit < period.end ? endLimit : period.end;
   if (effectiveStart > effectiveEnd) return null;
 
   return { start: effectiveStart, end: effectiveEnd };
+}
+
+// Billable range within the pay period containing today, clamped to [startDate, yesterday].
+// Today itself isn't counted yet here — a day's spending only locks in once it's over.
+// This is the "official" balance shown as the headline figure.
+function getBillableRange(startDate, payday) {
+  const today = new Date(todayStr() + 'T00:00:00');
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return getRangeUpTo(startDate, payday, yesterday);
+}
+
+// Same as getBillableRange but includes today — a live preview, not the locked-in figure.
+function getRealtimeRange(startDate, payday) {
+  const today = new Date(todayStr() + 'T00:00:00');
+  return getRangeUpTo(startDate, payday, today);
 }
 
 function expensesInRange(expenses, range) {
@@ -210,10 +221,12 @@ const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const balanceLabelEl = document.getElementById('balanceLabel');
 const balanceAmountEl = document.getElementById('balanceAmount');
 const balanceDetailEl = document.getElementById('balanceDetail');
+const realtimeInfoEl = document.getElementById('realtimeInfo');
 const prevPeriodInfoEl = document.getElementById('prevPeriodInfo');
 const mealBalanceLabelEl = document.getElementById('mealBalanceLabel');
 const mealBalanceAmountEl = document.getElementById('mealBalanceAmount');
 const mealBalanceDetailEl = document.getElementById('mealBalanceDetail');
+const realtimeMealInfoEl = document.getElementById('realtimeMealInfo');
 const prevMealPeriodInfoEl = document.getElementById('prevMealPeriodInfo');
 const expenseForm = document.getElementById('expenseForm');
 const expenseDate = document.getElementById('expenseDate');
@@ -325,6 +338,25 @@ function renderDaily() {
   mealBalanceAmountEl.textContent = formatMoney(mealBalance);
   mealBalanceAmountEl.classList.toggle('negative', mealBalance < 0);
   mealBalanceDetailEl.textContent = `本期額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費（至前一天）$${formatMoney(mealSpent)}`;
+
+  const realtimeRange = getRealtimeRange(settings.startDate, settings.payday);
+  const realtimeExpenses = expensesInRange(expenses, realtimeRange);
+  const realtimeAllowance = sumAllowanceForRange(realtimeRange, settings, overrides, mealSlotOverrides);
+  const realtimeDailySpent = realtimeExpenses
+    .filter((e) => (e.category || 'daily') !== 'meal')
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+  const realtimeBalance = realtimeAllowance.total - realtimeDailySpent;
+  realtimeInfoEl.textContent = `即時總結（含今日）：$${formatMoney(realtimeBalance)}`;
+  realtimeInfoEl.classList.toggle('negative', realtimeBalance < 0);
+  realtimeInfoEl.classList.toggle('positive', realtimeBalance >= 0);
+
+  const realtimeMealSpent = realtimeExpenses
+    .filter((e) => (e.category || 'daily') === 'meal')
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+  const realtimeMealBalance = Number(settings.mealBudget || 0) - realtimeMealSpent;
+  realtimeMealInfoEl.textContent = `即時總結（含今日）：$${formatMoney(realtimeMealBalance)}`;
+  realtimeMealInfoEl.classList.toggle('negative', realtimeMealBalance < 0);
+  realtimeMealInfoEl.classList.toggle('positive', realtimeMealBalance >= 0);
 
   const isPayday = toDateStr(period.start) === todayStr();
   prevPeriodInfoEl.textContent = '';
