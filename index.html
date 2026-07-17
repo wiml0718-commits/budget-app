@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="記帳">
 <title>記帳程式</title>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <div class="app">
@@ -32,18 +32,33 @@
     <div class="card">
       <h2>設定</h2>
       <div class="form-row">
-        <label>每日額度
-          <input type="number" id="dailyAllowanceInput" step="1" min="0">
-        </label>
         <label>起始日期
           <input type="date" id="startDateInput">
+        </label>
+        <label>上班額度
+          <input type="number" id="workAllowanceInput" step="1" min="0">
+        </label>
+        <label>休假額度
+          <input type="number" id="offAllowanceInput" step="1" min="0">
         </label>
         <label>每月大餐額度
           <input type="number" id="mealBudgetInput" step="1" min="0">
         </label>
-        <button id="saveSettingsBtn">儲存設定</button>
       </div>
-      <p class="hint-text">每月額度都會在每月 1 號重新計算，不會累積到下個月（起始月份依起始日期算部分天數）。</p>
+      <div class="form-row settings-shift-row">
+        <label>班表基準日
+          <input type="date" id="shiftAnchorInput">
+        </label>
+      </div>
+      <div class="category-block">
+        <span class="category-block-label">基準日班別</span>
+        <span class="category-toggle">
+          <label><input type="radio" name="shiftAnchorType" value="work"> 上班</label>
+          <label><input type="radio" name="shiftAnchorType" value="off" checked> 休假</label>
+        </span>
+      </div>
+      <button id="saveSettingsBtn" class="submit-btn">儲存設定</button>
+      <p class="hint-text">每月額度都會在每月 1 號重新計算，不會累積到下個月（起始月份依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。</p>
     </div>
 
     <div class="card">
@@ -85,6 +100,14 @@
 
     <div class="card">
       <h2 id="selectedDayLabel">當天花費</h2>
+      <div class="shift-control">
+        <span id="shiftStatusLabel" class="shift-status-label"></span>
+        <span class="shift-toggle">
+          <button type="button" id="shiftWorkBtn" class="shift-btn">設為上班</button>
+          <button type="button" id="shiftOffBtn" class="shift-btn">設為休假</button>
+          <button type="button" id="shiftResetBtn" class="shift-btn shift-reset">還原自動</button>
+        </span>
+      </div>
       <ul id="expenseList" class="record-list"></ul>
     </div>
   </section>
@@ -117,6 +140,6 @@
     </div>
   </section>
 </div>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

@@ -2,17 +2,28 @@ const STORAGE_KEYS = {
   settings: 'budget.settings',
   expenses: 'budget.expenses',
   travel: 'budget.travel',
+  dayTypeOverrides: 'budget.dayTypeOverrides',
 };
 
+function toDateStr(date) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
 function todayStr() {
-  const d = new Date();
-  const offset = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - offset).toISOString().slice(0, 10);
+  return toDateStr(new Date());
 }
 
 function loadSettings() {
   const raw = localStorage.getItem(STORAGE_KEYS.settings);
-  const defaults = { dailyAllowance: 0, startDate: todayStr(), mealBudget: 0 };
+  const defaults = {
+    startDate: todayStr(),
+    workAllowance: 0,
+    offAllowance: 0,
+    mealBudget: 0,
+    shiftAnchorDate: todayStr(),
+    shiftAnchorType: 'off',
+  };
   if (raw) return { ...defaults, ...JSON.parse(raw) };
   return defaults;
 }
@@ -30,9 +41,33 @@ function saveRecords(key, records) {
   localStorage.setItem(key, JSON.stringify(records));
 }
 
-// Days "billable" within monthDate's month, clamped to [startDate, today].
-// Past months count in full (from startDate if later than month start); future months count as 0.
-function daysElapsedInMonth(startDate, monthDate) {
+function loadOverrides() {
+  const raw = localStorage.getItem(STORAGE_KEYS.dayTypeOverrides);
+  return raw ? JSON.parse(raw) : {};
+}
+
+function saveOverrides(overrides) {
+  localStorage.setItem(STORAGE_KEYS.dayTypeOverrides, JSON.stringify(overrides));
+}
+
+// 2-on/2-off rotation relative to the anchor date; anchor's own type is shiftAnchorType.
+function computeShiftType(dateStr, anchorDate, anchorType) {
+  const date = new Date(dateStr + 'T00:00:00');
+  const anchor = new Date(anchorDate + 'T00:00:00');
+  const diffDays = Math.round((date - anchor) / 86400000);
+  const mod = ((diffDays % 4) + 4) % 4;
+  const isAnchorPhase = mod === 0 || mod === 1;
+  const otherType = anchorType === 'work' ? 'off' : 'work';
+  return isAnchorPhase ? anchorType : otherType;
+}
+
+function getDayType(dateStr, settings, overrides) {
+  return overrides[dateStr] || computeShiftType(dateStr, settings.shiftAnchorDate, settings.shiftAnchorType);
+}
+
+// Billable date range within monthDate's month, clamped to [startDate, today].
+// Past months count in full (from startDate if later than month start); future months are null.
+function getBillableRange(startDate, monthDate) {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
   const monthStart = new Date(year, month, 1);
@@ -40,13 +75,31 @@ function daysElapsedInMonth(startDate, monthDate) {
   const start = new Date(startDate + 'T00:00:00');
   const today = new Date(todayStr() + 'T00:00:00');
 
-  if (monthStart > today) return 0;
+  if (monthStart > today) return null;
 
   const effectiveStart = start > monthStart ? start : monthStart;
   const effectiveEnd = today < monthEnd ? today : monthEnd;
-  if (effectiveStart > effectiveEnd) return 0;
+  if (effectiveStart > effectiveEnd) return null;
 
-  return Math.floor((effectiveEnd - effectiveStart) / 86400000) + 1;
+  return { start: effectiveStart, end: effectiveEnd };
+}
+
+function sumAllowanceForRange(range, settings, overrides) {
+  const result = { total: 0, days: 0, workDays: 0, offDays: 0 };
+  if (!range) return result;
+
+  for (let d = new Date(range.start); d <= range.end; d.setDate(d.getDate() + 1)) {
+    const type = getDayType(toDateStr(d), settings, overrides);
+    if (type === 'work') {
+      result.total += Number(settings.workAllowance || 0);
+      result.workDays++;
+    } else {
+      result.total += Number(settings.offAllowance || 0);
+      result.offDays++;
+    }
+    result.days++;
+  }
+  return result;
 }
 
 function monthKey(year, month) {
@@ -68,9 +121,11 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 });
 
 // ---- Daily budget ----
-const dailyAllowanceInput = document.getElementById('dailyAllowanceInput');
 const startDateInput = document.getElementById('startDateInput');
+const workAllowanceInput = document.getElementById('workAllowanceInput');
+const offAllowanceInput = document.getElementById('offAllowanceInput');
 const mealBudgetInput = document.getElementById('mealBudgetInput');
+const shiftAnchorInput = document.getElementById('shiftAnchorInput');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const balanceLabelEl = document.getElementById('balanceLabel');
 const balanceAmountEl = document.getElementById('balanceAmount');
@@ -88,12 +143,16 @@ const calendarGrid = document.getElementById('calendarGrid');
 const selectedDayLabel = document.getElementById('selectedDayLabel');
 const prevMonthBtn = document.getElementById('prevMonthBtn');
 const nextMonthBtn = document.getElementById('nextMonthBtn');
+const shiftStatusLabel = document.getElementById('shiftStatusLabel');
+const shiftWorkBtn = document.getElementById('shiftWorkBtn');
+const shiftOffBtn = document.getElementById('shiftOffBtn');
+const shiftResetBtn = document.getElementById('shiftResetBtn');
 
 let selectedDate = todayStr();
 let calendarMonth = new Date(`${selectedDate}T00:00:00`);
 calendarMonth.setDate(1);
 
-function renderCalendar(expenses) {
+function renderCalendar(expenses, settings, overrides) {
   const year = calendarMonth.getFullYear();
   const month = calendarMonth.getMonth();
   calendarTitle.textContent = `${year}年${month + 1}月`;
@@ -126,6 +185,8 @@ function renderCalendar(expenses) {
     cell.className = 'cal-cell';
     if (dateStr === todayStr()) cell.classList.add('today');
     if (dateStr === selectedDate) cell.classList.add('selected');
+    if (getDayType(dateStr, settings, overrides) === 'off') cell.classList.add('shift-off');
+    if (overrides[dateStr]) cell.classList.add('shift-override');
 
     const spent = dailySpentByDate[dateStr];
     const mealSpent = mealSpentByDate[dateStr];
@@ -145,9 +206,13 @@ function renderCalendar(expenses) {
 
 function renderDaily() {
   const settings = loadSettings();
-  dailyAllowanceInput.value = settings.dailyAllowance;
+  const overrides = loadOverrides();
   startDateInput.value = settings.startDate;
+  workAllowanceInput.value = settings.workAllowance;
+  offAllowanceInput.value = settings.offAllowance;
   mealBudgetInput.value = settings.mealBudget;
+  shiftAnchorInput.value = settings.shiftAnchorDate;
+  document.querySelector(`input[name="shiftAnchorType"][value="${settings.shiftAnchorType}"]`).checked = true;
 
   const expenses = loadRecords(STORAGE_KEYS.expenses);
   const year = calendarMonth.getFullYear();
@@ -155,8 +220,8 @@ function renderDaily() {
   const key = monthKey(year, month);
   const monthExpenses = expenses.filter((e) => e.date.startsWith(key));
 
-  const days = daysElapsedInMonth(settings.startDate, calendarMonth);
-  const totalAllowance = days * Number(settings.dailyAllowance || 0);
+  const range = getBillableRange(settings.startDate, calendarMonth);
+  const { total: totalAllowance, days, workDays, offDays } = sumAllowanceForRange(range, settings, overrides);
   const dailySpent = monthExpenses
     .filter((e) => (e.category || 'daily') !== 'meal')
     .reduce((sum, e) => sum + Number(e.amount), 0);
@@ -165,7 +230,7 @@ function renderDaily() {
   balanceLabelEl.textContent = `${year}年${month + 1}月 累積額度`;
   balanceAmountEl.textContent = formatMoney(balance);
   balanceAmountEl.classList.toggle('negative', balance < 0);
-  balanceDetailEl.textContent = `已累積 ${days} 天 x $${settings.dailyAllowance} = $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
+  balanceDetailEl.textContent = `已累積 ${days} 天（上班 ${workDays} 天 x $${settings.workAllowance} + 休假 ${offDays} 天 x $${settings.offAllowance}）= $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
 
   const mealSpent = monthExpenses
     .filter((e) => (e.category || 'daily') === 'meal')
@@ -177,7 +242,12 @@ function renderDaily() {
   mealBalanceAmountEl.classList.toggle('negative', mealBalance < 0);
   mealBalanceDetailEl.textContent = `本月額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費 $${formatMoney(mealSpent)}`;
 
-  renderCalendar(expenses);
+  renderCalendar(expenses, settings, overrides);
+
+  const selectedType = getDayType(selectedDate, settings, overrides);
+  const isOverridden = Boolean(overrides[selectedDate]);
+  shiftStatusLabel.textContent = `${selectedDate}：${selectedType === 'work' ? '上班' : '休假'}${isOverridden ? '（手動）' : '（自動）'}`;
+  shiftResetBtn.disabled = !isOverridden;
 
   selectedDayLabel.textContent = `${selectedDate} 花費`;
   const dayExpenses = expenses.filter((e) => e.date === selectedDate);
@@ -218,10 +288,29 @@ nextMonthBtn.addEventListener('click', () => {
 
 saveSettingsBtn.addEventListener('click', () => {
   saveSettings({
-    dailyAllowance: Number(dailyAllowanceInput.value || 0),
     startDate: startDateInput.value || todayStr(),
+    workAllowance: Number(workAllowanceInput.value || 0),
+    offAllowance: Number(offAllowanceInput.value || 0),
     mealBudget: Number(mealBudgetInput.value || 0),
+    shiftAnchorDate: shiftAnchorInput.value || todayStr(),
+    shiftAnchorType: document.querySelector('input[name="shiftAnchorType"]:checked').value,
   });
+  renderDaily();
+});
+
+function setDayOverride(dateStr, type) {
+  const overrides = loadOverrides();
+  overrides[dateStr] = type;
+  saveOverrides(overrides);
+  renderDaily();
+}
+
+shiftWorkBtn.addEventListener('click', () => setDayOverride(selectedDate, 'work'));
+shiftOffBtn.addEventListener('click', () => setDayOverride(selectedDate, 'off'));
+shiftResetBtn.addEventListener('click', () => {
+  const overrides = loadOverrides();
+  delete overrides[selectedDate];
+  saveOverrides(overrides);
   renderDaily();
 });
 

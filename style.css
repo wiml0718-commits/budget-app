@@ -156,6 +156,48 @@ body {
   margin-top: 10px;
 }
 
+.settings-shift-row {
+  margin-top: 10px;
+}
+
+.shift-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.shift-status-label {
+  color: #555;
+  font-weight: 600;
+}
+
+.shift-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.shift-btn {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shift-btn:disabled {
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+.shift-btn.shift-reset {
+  color: #999;
+}
+
 .category-block-label {
   display: block;
   font-size: 13px;
@@ -338,6 +380,19 @@ body {
 
 .cal-cell.today {
   border-color: #1f2328;
+}
+
+.cal-cell.shift-off {
+  background: #fff7ed;
+}
+
+.cal-cell.shift-override {
+  border-style: dashed;
+  border-color: #d97706;
+}
+
+.cal-cell.selected.shift-off {
+  background: #1f2328;
 }
 
 .cal-cell.selected {
