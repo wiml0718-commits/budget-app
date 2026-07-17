@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="記帳">
 <title>記帳程式</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <div class="app">
@@ -49,7 +49,7 @@
         </span>
       </div>
       <button id="saveSettingsBtn" class="submit-btn">儲存設定</button>
-      <p class="hint-text">額度以發薪日為週期重新計算，不會累積到下一期（第一期依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。額度計算至前一天，當天新增的花費隔天才會反映。</p>
+      <p class="hint-text">額度以發薪日為週期重新計算，不會累積到下一期（第一期依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。上班日算 1 餐、休假日算 2 餐，點月曆選日期後可逐餐標記「一般消費/自己煮/大餐」，只有一般消費的餐次會累加進額度；實際花費仍需在下方另外新增並選對類別。額度計算至前一天，當天新增的花費隔天才會反映。</p>
     </details>
 
     <div class="card balance-card">
@@ -115,10 +115,8 @@
       </div>
       <div class="shift-control">
         <span id="mealCreditLabel" class="shift-status-label"></span>
-        <span class="shift-toggle">
-          <button type="button" id="selfCookBtn" class="shift-btn">標記自己煮（半額）</button>
-        </span>
       </div>
+      <div id="mealSlotsContainer" class="meal-slots"></div>
       <ul id="expenseList" class="record-list"></ul>
     </div>
   </section>
@@ -151,6 +149,6 @@
     </div>
   </section>
 </div>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

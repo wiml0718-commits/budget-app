@@ -3,7 +3,7 @@ const STORAGE_KEYS = {
   expenses: 'budget.expenses',
   travel: 'budget.travel',
   dayTypeOverrides: 'budget.dayTypeOverrides',
-  selfCookDays: 'budget.selfCookDays',
+  mealSlots: 'budget.mealSlots',
 };
 
 function toDateStr(date) {
@@ -52,12 +52,18 @@ function saveDayFlags(key, flags) {
   localStorage.setItem(key, JSON.stringify(flags));
 }
 
-function buildMealDaySet(expenses) {
-  const set = {};
-  expenses.forEach((e) => {
-    if ((e.category || 'daily') === 'meal') set[e.date] = true;
-  });
-  return set;
+// Work days have 1 meal slot, off days have 2.
+function getMealSlotCount(dayType) {
+  return dayType === 'work' ? 1 : 2;
+}
+
+// Each slot is 'general' | 'selfcook' | 'meal'. Defaults to all-general when unset,
+// or when a day-type override changed the slot count since it was last saved.
+function getMealSlots(dateStr, dayType, mealSlotOverrides) {
+  const count = getMealSlotCount(dayType);
+  const saved = mealSlotOverrides[dateStr];
+  if (saved && saved.length === count) return saved;
+  return Array(count).fill('general');
 }
 
 // 2-on/2-off rotation relative to the anchor date; anchor's own type is shiftAnchorType.
@@ -150,26 +156,25 @@ function expensesInRange(expenses, range) {
   return expenses.filter((e) => e.date >= startStr && e.date <= endStr);
 }
 
-// Each day is worth 2 meals of allowance. A logged 大餐 that day, or a manual
-// "self-cooked" flag, means one meal didn't need the daily allowance — halve
-// that day's credit per such meal (both present = the day needs no allowance).
-function dayAllowanceMultiplier(dateStr, mealDays, selfCookDays) {
-  let mealsCoveredElsewhere = 0;
-  if (mealDays[dateStr]) mealsCoveredElsewhere++;
-  if (selfCookDays[dateStr]) mealsCoveredElsewhere++;
-  mealsCoveredElsewhere = Math.min(mealsCoveredElsewhere, 2);
-  return (2 - mealsCoveredElsewhere) / 2;
+// Only meal slots marked 'general' contribute their per-meal share of the
+// day's rate; 'selfcook' and 'meal' slots contribute nothing to this pool
+// (a 大餐 slot's actual cost is tracked separately against the meal budget).
+function dayAllowanceCredit(dateStr, dayType, settings, mealSlotOverrides) {
+  const dayRate = dayType === 'work' ? Number(settings.workAllowance || 0) : Number(settings.offAllowance || 0);
+  const slots = getMealSlots(dateStr, dayType, mealSlotOverrides);
+  const perMealRate = dayRate / slots.length;
+  const generalCount = slots.filter((s) => s === 'general').length;
+  return perMealRate * generalCount;
 }
 
-function sumAllowanceForRange(range, settings, overrides, mealDays, selfCookDays) {
+function sumAllowanceForRange(range, settings, overrides, mealSlotOverrides) {
   const result = { total: 0, days: 0, workDays: 0, offDays: 0 };
   if (!range) return result;
 
   for (let d = new Date(range.start); d <= range.end; d.setDate(d.getDate() + 1)) {
     const dateStr = toDateStr(d);
     const type = getDayType(dateStr, settings, overrides);
-    const baseRate = type === 'work' ? Number(settings.workAllowance || 0) : Number(settings.offAllowance || 0);
-    result.total += baseRate * dayAllowanceMultiplier(dateStr, mealDays, selfCookDays);
+    result.total += dayAllowanceCredit(dateStr, type, settings, mealSlotOverrides);
     if (type === 'work') {
       result.workDays++;
     } else {
@@ -225,7 +230,7 @@ const shiftWorkBtn = document.getElementById('shiftWorkBtn');
 const shiftOffBtn = document.getElementById('shiftOffBtn');
 const shiftResetBtn = document.getElementById('shiftResetBtn');
 const mealCreditLabel = document.getElementById('mealCreditLabel');
-const selfCookBtn = document.getElementById('selfCookBtn');
+const mealSlotsContainer = document.getElementById('mealSlotsContainer');
 
 let selectedDate = todayStr();
 let calendarMonth = new Date(`${selectedDate}T00:00:00`);
@@ -286,7 +291,7 @@ function renderCalendar(expenses, settings, overrides) {
 function renderDaily() {
   const settings = loadSettings();
   const overrides = loadDayFlags(STORAGE_KEYS.dayTypeOverrides);
-  const selfCookDays = loadDayFlags(STORAGE_KEYS.selfCookDays);
+  const mealSlotOverrides = loadDayFlags(STORAGE_KEYS.mealSlots);
   startDateInput.value = settings.startDate;
   paydayInput.value = settings.payday;
   workAllowanceInput.value = settings.workAllowance;
@@ -296,12 +301,11 @@ function renderDaily() {
   document.querySelector(`input[name="shiftAnchorType"][value="${settings.shiftAnchorType}"]`).checked = true;
 
   const expenses = loadRecords(STORAGE_KEYS.expenses);
-  const mealDays = buildMealDaySet(expenses);
   const period = getPeriodForDate(todayStr(), settings.payday);
   const range = getBillableRange(settings.startDate, settings.payday);
   const periodExpenses = expensesInRange(expenses, range);
 
-  const { total: totalAllowance, days, workDays, offDays } = sumAllowanceForRange(range, settings, overrides, mealDays, selfCookDays);
+  const { total: totalAllowance, days, workDays, offDays } = sumAllowanceForRange(range, settings, overrides, mealSlotOverrides);
   const dailySpent = periodExpenses
     .filter((e) => (e.category || 'daily') !== 'meal')
     .reduce((sum, e) => sum + Number(e.amount), 0);
@@ -334,7 +338,7 @@ function renderDaily() {
     const prevDailySpent = prevExpenses
       .filter((e) => (e.category || 'daily') !== 'meal')
       .reduce((sum, e) => sum + Number(e.amount), 0);
-    const prevAllowance = sumAllowanceForRange(prevPeriod, settings, overrides, mealDays, selfCookDays);
+    const prevAllowance = sumAllowanceForRange(prevPeriod, settings, overrides, mealSlotOverrides);
     const prevBalance = prevAllowance.total - prevDailySpent;
     prevPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevBalance)}`;
     prevPeriodInfoEl.classList.toggle('negative', prevBalance < 0);
@@ -356,12 +360,7 @@ function renderDaily() {
   shiftStatusLabel.textContent = `${selectedDate}：${selectedType === 'work' ? '上班' : '休假'}${isOverridden ? '（手動）' : '（自動）'}`;
   shiftResetBtn.disabled = !isOverridden;
 
-  const selectedBaseRate = selectedType === 'work' ? Number(settings.workAllowance || 0) : Number(settings.offAllowance || 0);
-  const selectedMultiplier = dayAllowanceMultiplier(selectedDate, mealDays, selfCookDays);
-  const selectedIsSelfCook = Boolean(selfCookDays[selectedDate]);
-  const selectedHasMeal = Boolean(mealDays[selectedDate]);
-  mealCreditLabel.textContent = `當天額度：$${formatMoney(selectedBaseRate * selectedMultiplier)}${selectedHasMeal ? '（已有大餐，自動扣半）' : ''}${selectedIsSelfCook ? '（已標記自己煮，再扣半）' : ''}`;
-  selfCookBtn.textContent = selectedIsSelfCook ? '取消自己煮標記' : '標記自己煮（半額）';
+  renderMealSlots(selectedDate, selectedType, settings, mealSlotOverrides);
 
   selectedDayLabel.textContent = `${selectedDate} 花費`;
   const dayExpenses = expenses.filter((e) => e.date === selectedDate);
@@ -433,16 +432,42 @@ shiftResetBtn.addEventListener('click', () => {
   renderDaily();
 });
 
-selfCookBtn.addEventListener('click', () => {
-  const selfCookDays = loadDayFlags(STORAGE_KEYS.selfCookDays);
-  if (selfCookDays[selectedDate]) {
-    delete selfCookDays[selectedDate];
-  } else {
-    selfCookDays[selectedDate] = true;
-  }
-  saveDayFlags(STORAGE_KEYS.selfCookDays, selfCookDays);
-  renderDaily();
-});
+const mealSlotTypeLabels = { general: '一般消費', selfcook: '自己煮', meal: '大餐' };
+
+function renderMealSlots(dateStr, dayType, settings, mealSlotOverrides) {
+  const slots = getMealSlots(dateStr, dayType, mealSlotOverrides);
+  const credit = dayAllowanceCredit(dateStr, dayType, settings, mealSlotOverrides);
+  const generalCount = slots.filter((s) => s === 'general').length;
+  mealCreditLabel.textContent = `當天額度：$${formatMoney(credit)}（${slots.length} 餐中 ${generalCount} 餐為一般消費）`;
+
+  mealSlotsContainer.innerHTML = '';
+  slots.forEach((slotType, idx) => {
+    const row = document.createElement('div');
+    row.className = 'meal-slot-row';
+    const groupName = `mealSlot${idx}`;
+    row.innerHTML = `
+      <span class="meal-slot-label">第${idx + 1}餐</span>
+      <span class="meal-slot-toggle">
+        ${['general', 'selfcook', 'meal']
+          .map(
+            (value) =>
+              `<label><input type="radio" name="${groupName}" value="${value}" ${slotType === value ? 'checked' : ''}> ${mealSlotTypeLabels[value]}</label>`
+          )
+          .join('')}
+      </span>`;
+    row.querySelectorAll('input[type="radio"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        const allOverrides = loadDayFlags(STORAGE_KEYS.mealSlots);
+        const newSlots = getMealSlots(dateStr, dayType, allOverrides);
+        newSlots[idx] = radio.value;
+        allOverrides[dateStr] = newSlots;
+        saveDayFlags(STORAGE_KEYS.mealSlots, allOverrides);
+        renderDaily();
+      });
+    });
+    mealSlotsContainer.appendChild(row);
+  });
+}
 
 expenseForm.addEventListener('submit', (evt) => {
   evt.preventDefault();
