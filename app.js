@@ -18,6 +18,7 @@ function loadSettings() {
   const raw = localStorage.getItem(STORAGE_KEYS.settings);
   const defaults = {
     startDate: todayStr(),
+    payday: 1,
     workAllowance: 0,
     offAllowance: 0,
     mealBudget: 0,
@@ -65,23 +66,76 @@ function getDayType(dateStr, settings, overrides) {
   return overrides[dateStr] || computeShiftType(dateStr, settings.shiftAnchorDate, settings.shiftAnchorType);
 }
 
-// Billable date range within monthDate's month, clamped to [startDate, today].
-// Past months count in full (from startDate if later than month start); future months are null.
-function getBillableRange(startDate, monthDate) {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const monthStart = new Date(year, month, 1);
-  const monthEnd = new Date(year, month + 1, 0);
-  const start = new Date(startDate + 'T00:00:00');
+function daysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function clampPayday(year, month, payday) {
+  return Math.min(payday, daysInMonth(year, month));
+}
+
+// Pay period containing dateStr: starts on `payday` of a month, ends the day before
+// the next occurrence of `payday`. Clamped to the last day of shorter months.
+function getPeriodForDate(dateStr, payday) {
+  const date = new Date(dateStr + 'T00:00:00');
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const thisMonthPayday = clampPayday(year, month, payday);
+
+  let startYear = year;
+  let startMonth = month;
+  if (date.getDate() < thisMonthPayday) {
+    startMonth -= 1;
+    if (startMonth < 0) {
+      startMonth = 11;
+      startYear -= 1;
+    }
+  }
+  const start = new Date(startYear, startMonth, clampPayday(startYear, startMonth, payday));
+
+  let endYear = startYear;
+  let endMonth = startMonth + 1;
+  if (endMonth > 11) {
+    endMonth = 0;
+    endYear += 1;
+  }
+  const end = new Date(endYear, endMonth, clampPayday(endYear, endMonth, payday));
+  end.setDate(end.getDate() - 1);
+
+  return { start, end };
+}
+
+function getPreviousPeriodRange(payday) {
+  const currentPeriod = getPeriodForDate(todayStr(), payday);
+  const prevEnd = new Date(currentPeriod.start);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  return getPeriodForDate(toDateStr(prevEnd), payday);
+}
+
+function formatRangeLabel(range) {
+  const s = `${range.start.getMonth() + 1}/${range.start.getDate()}`;
+  const e = `${range.end.getMonth() + 1}/${range.end.getDate()}`;
+  return `${s}～${e}`;
+}
+
+// Billable range within the pay period containing today, clamped to [startDate, today].
+function getBillableRange(startDate, payday) {
   const today = new Date(todayStr() + 'T00:00:00');
+  const period = getPeriodForDate(todayStr(), payday);
+  const start = new Date(startDate + 'T00:00:00');
 
-  if (monthStart > today) return null;
-
-  const effectiveStart = start > monthStart ? start : monthStart;
-  const effectiveEnd = today < monthEnd ? today : monthEnd;
+  const effectiveStart = start > period.start ? start : period.start;
+  const effectiveEnd = today < period.end ? today : period.end;
   if (effectiveStart > effectiveEnd) return null;
 
   return { start: effectiveStart, end: effectiveEnd };
+}
+
+function expensesInRange(expenses, range) {
+  if (!range) return [];
+  const startStr = toDateStr(range.start);
+  const endStr = toDateStr(range.end);
+  return expenses.filter((e) => e.date >= startStr && e.date <= endStr);
 }
 
 function sumAllowanceForRange(range, settings, overrides) {
@@ -102,10 +156,6 @@ function sumAllowanceForRange(range, settings, overrides) {
   return result;
 }
 
-function monthKey(year, month) {
-  return `${year}-${String(month + 1).padStart(2, '0')}`;
-}
-
 function formatMoney(n) {
   return n.toLocaleString('zh-TW');
 }
@@ -122,6 +172,7 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 
 // ---- Daily budget ----
 const startDateInput = document.getElementById('startDateInput');
+const paydayInput = document.getElementById('paydayInput');
 const workAllowanceInput = document.getElementById('workAllowanceInput');
 const offAllowanceInput = document.getElementById('offAllowanceInput');
 const mealBudgetInput = document.getElementById('mealBudgetInput');
@@ -130,9 +181,11 @@ const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const balanceLabelEl = document.getElementById('balanceLabel');
 const balanceAmountEl = document.getElementById('balanceAmount');
 const balanceDetailEl = document.getElementById('balanceDetail');
+const prevPeriodInfoEl = document.getElementById('prevPeriodInfo');
 const mealBalanceLabelEl = document.getElementById('mealBalanceLabel');
 const mealBalanceAmountEl = document.getElementById('mealBalanceAmount');
 const mealBalanceDetailEl = document.getElementById('mealBalanceDetail');
+const prevMealPeriodInfoEl = document.getElementById('prevMealPeriodInfo');
 const expenseForm = document.getElementById('expenseForm');
 const expenseDate = document.getElementById('expenseDate');
 const expenseAmount = document.getElementById('expenseAmount');
@@ -168,7 +221,7 @@ function renderCalendar(expenses, settings, overrides) {
   });
 
   const firstDay = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalDaysInMonth = daysInMonth(year, month);
   const startOffset = firstDay.getDay(); // 0 = Sunday
 
   calendarGrid.innerHTML = '';
@@ -179,7 +232,7 @@ function renderCalendar(expenses, settings, overrides) {
     calendarGrid.appendChild(empty);
   }
 
-  for (let day = 1; day <= daysInMonth; day++) {
+  for (let day = 1; day <= totalDaysInMonth; day++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
@@ -208,6 +261,7 @@ function renderDaily() {
   const settings = loadSettings();
   const overrides = loadOverrides();
   startDateInput.value = settings.startDate;
+  paydayInput.value = settings.payday;
   workAllowanceInput.value = settings.workAllowance;
   offAllowanceInput.value = settings.offAllowance;
   mealBudgetInput.value = settings.mealBudget;
@@ -215,32 +269,49 @@ function renderDaily() {
   document.querySelector(`input[name="shiftAnchorType"][value="${settings.shiftAnchorType}"]`).checked = true;
 
   const expenses = loadRecords(STORAGE_KEYS.expenses);
-  const year = calendarMonth.getFullYear();
-  const month = calendarMonth.getMonth();
-  const key = monthKey(year, month);
-  const monthExpenses = expenses.filter((e) => e.date.startsWith(key));
+  const period = getPeriodForDate(todayStr(), settings.payday);
+  const range = getBillableRange(settings.startDate, settings.payday);
+  const periodExpenses = expensesInRange(expenses, range);
 
-  const range = getBillableRange(settings.startDate, calendarMonth);
   const { total: totalAllowance, days, workDays, offDays } = sumAllowanceForRange(range, settings, overrides);
-  const dailySpent = monthExpenses
+  const dailySpent = periodExpenses
     .filter((e) => (e.category || 'daily') !== 'meal')
     .reduce((sum, e) => sum + Number(e.amount), 0);
   const balance = totalAllowance - dailySpent;
 
-  balanceLabelEl.textContent = `${year}年${month + 1}月 累積額度`;
+  balanceLabelEl.textContent = `本期累積額度（${formatRangeLabel(period)}）`;
   balanceAmountEl.textContent = formatMoney(balance);
   balanceAmountEl.classList.toggle('negative', balance < 0);
   balanceDetailEl.textContent = `已累積 ${days} 天（上班 ${workDays} 天 x $${settings.workAllowance} + 休假 ${offDays} 天 x $${settings.offAllowance}）= $${formatMoney(totalAllowance)}，已花費 $${formatMoney(dailySpent)}`;
 
-  const mealSpent = monthExpenses
+  const mealSpent = periodExpenses
     .filter((e) => (e.category || 'daily') === 'meal')
     .reduce((sum, e) => sum + Number(e.amount), 0);
   const mealBalance = Number(settings.mealBudget || 0) - mealSpent;
 
-  mealBalanceLabelEl.textContent = `${year}年${month + 1}月 大餐額度`;
+  mealBalanceLabelEl.textContent = `本期大餐額度（${formatRangeLabel(period)}）`;
   mealBalanceAmountEl.textContent = formatMoney(mealBalance);
   mealBalanceAmountEl.classList.toggle('negative', mealBalance < 0);
-  mealBalanceDetailEl.textContent = `本月額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費 $${formatMoney(mealSpent)}`;
+  mealBalanceDetailEl.textContent = `本期額度 $${formatMoney(Number(settings.mealBudget || 0))}，已花費 $${formatMoney(mealSpent)}`;
+
+  const prevPeriod = getPreviousPeriodRange(settings.payday);
+  const prevExpenses = expensesInRange(expenses, prevPeriod);
+  const prevDailySpent = prevExpenses
+    .filter((e) => (e.category || 'daily') !== 'meal')
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+  const prevAllowance = sumAllowanceForRange(prevPeriod, settings, overrides);
+  const prevBalance = prevAllowance.total - prevDailySpent;
+  prevPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevBalance)}`;
+  prevPeriodInfoEl.classList.toggle('negative', prevBalance < 0);
+  prevPeriodInfoEl.classList.toggle('positive', prevBalance >= 0);
+
+  const prevMealSpent = prevExpenses
+    .filter((e) => (e.category || 'daily') === 'meal')
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+  const prevMealBalance = Number(settings.mealBudget || 0) - prevMealSpent;
+  prevMealPeriodInfoEl.textContent = `上一期（${formatRangeLabel(prevPeriod)}）結餘：$${formatMoney(prevMealBalance)}`;
+  prevMealPeriodInfoEl.classList.toggle('negative', prevMealBalance < 0);
+  prevMealPeriodInfoEl.classList.toggle('positive', prevMealBalance >= 0);
 
   renderCalendar(expenses, settings, overrides);
 
@@ -287,8 +358,10 @@ nextMonthBtn.addEventListener('click', () => {
 });
 
 saveSettingsBtn.addEventListener('click', () => {
+  const payday = Math.min(31, Math.max(1, Number(paydayInput.value || 1)));
   saveSettings({
     startDate: startDateInput.value || todayStr(),
+    payday,
     workAllowance: Number(workAllowanceInput.value || 0),
     offAllowance: Number(offAllowanceInput.value || 0),
     mealBudget: Number(mealBudgetInput.value || 0),

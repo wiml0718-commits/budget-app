@@ -98,6 +98,20 @@ body {
   color: #999;
 }
 
+.prev-period-info {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #999;
+}
+
+.prev-period-info.positive {
+  color: #16a34a;
+}
+
+.prev-period-info.negative {
+  color: #dc2626;
+}
+
 .form-row {
   display: flex;
   flex-wrap: wrap;

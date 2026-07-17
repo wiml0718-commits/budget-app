@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="記帳">
 <title>記帳程式</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="app">
@@ -18,15 +18,17 @@
 
   <section id="daily" class="tab-panel active">
     <div class="card balance-card">
-      <div class="balance-label" id="balanceLabel">本月累積額度</div>
+      <div class="balance-label" id="balanceLabel">本期累積額度</div>
       <div id="balanceAmount" class="balance-amount">0</div>
       <div id="balanceDetail" class="balance-detail"></div>
+      <div id="prevPeriodInfo" class="prev-period-info"></div>
     </div>
 
     <div class="card balance-card">
-      <div class="balance-label" id="mealBalanceLabel">本月大餐額度</div>
+      <div class="balance-label" id="mealBalanceLabel">本期大餐額度</div>
       <div id="mealBalanceAmount" class="balance-amount meal">0</div>
       <div id="mealBalanceDetail" class="balance-detail"></div>
+      <div id="prevMealPeriodInfo" class="prev-period-info"></div>
     </div>
 
     <div class="card">
@@ -35,13 +37,16 @@
         <label>起始日期
           <input type="date" id="startDateInput">
         </label>
+        <label>發薪日（每月幾號）
+          <input type="number" id="paydayInput" step="1" min="1" max="31">
+        </label>
         <label>上班額度
           <input type="number" id="workAllowanceInput" step="1" min="0">
         </label>
         <label>休假額度
           <input type="number" id="offAllowanceInput" step="1" min="0">
         </label>
-        <label>每月大餐額度
+        <label>每期大餐額度
           <input type="number" id="mealBudgetInput" step="1" min="0">
         </label>
       </div>
@@ -58,7 +63,7 @@
         </span>
       </div>
       <button id="saveSettingsBtn" class="submit-btn">儲存設定</button>
-      <p class="hint-text">每月額度都會在每月 1 號重新計算，不會累積到下個月（起始月份依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。</p>
+      <p class="hint-text">額度以發薪日為週期重新計算，不會累積到下一期（第一期依起始日期算部分天數）。班表以基準日起算二休二循環，個別日期可在月曆點選後手動覆寫上班/休假。</p>
     </div>
 
     <div class="card">
@@ -140,6 +145,6 @@
     </div>
   </section>
 </div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
