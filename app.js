@@ -6,6 +6,70 @@ const STORAGE_KEYS = {
   mealSlots: 'budget.mealSlots',
 };
 
+// ---- Cloud sync (Supabase) ----
+// localStorage stays the local cache the UI reads synchronously; this layer
+// pulls the user's data on login and pushes the whole snapshot on every change.
+const SUPABASE_URL = 'https://wwzvvaoosoghdwnlwscw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3enZ2YW9vc29naGR3bmx3c2N3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTA4MDgsImV4cCI6MjEwMDM4NjgwOH0.V_04k5syuauw36U3FOn0II6ITCex5fm2nxGQ7jr-B7I';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const CLOUD_KEYS = Object.values(STORAGE_KEYS);
+
+let currentUser = null;
+let pushTimer = null;
+
+// Snapshot all app data (parsed) from localStorage into one object.
+function collectState() {
+  const state = {};
+  CLOUD_KEYS.forEach((k) => {
+    const raw = localStorage.getItem(k);
+    if (raw != null) {
+      try { state[k] = JSON.parse(raw); } catch { /* skip corrupt key */ }
+    }
+  });
+  return state;
+}
+
+// Write a cloud snapshot back into localStorage.
+function applyState(state) {
+  if (!state) return;
+  CLOUD_KEYS.forEach((k) => {
+    if (state[k] !== undefined) localStorage.setItem(k, JSON.stringify(state[k]));
+  });
+}
+
+// Debounced upload of the whole snapshot for the signed-in user.
+function schedulePush() {
+  if (!currentUser) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushToCloud, 800);
+}
+
+async function pushToCloud() {
+  if (!currentUser) return;
+  const { error } = await sb.from('budget_state').upsert({
+    user_id: currentUser.id,
+    data: collectState(),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) console.error('雲端儲存失敗', error);
+}
+
+// Pull the user's snapshot; if none exists yet, seed it from current local data
+// (first-login migration so existing localStorage data isn't lost).
+async function hydrateFromCloud() {
+  const { data, error } = await sb
+    .from('budget_state')
+    .select('data')
+    .eq('user_id', currentUser.id)
+    .maybeSingle();
+  if (error) { console.error('雲端讀取失敗', error); return; }
+  if (data && data.data && Object.keys(data.data).length > 0) {
+    applyState(data.data);
+  } else {
+    await pushToCloud();
+  }
+}
+
 function toDateStr(date) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
@@ -32,6 +96,7 @@ function loadSettings() {
 
 function saveSettings(settings) {
   localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(settings));
+  schedulePush();
 }
 
 function loadRecords(key) {
@@ -41,6 +106,7 @@ function loadRecords(key) {
 
 function saveRecords(key, records) {
   localStorage.setItem(key, JSON.stringify(records));
+  schedulePush();
 }
 
 function loadDayFlags(key) {
@@ -50,6 +116,7 @@ function loadDayFlags(key) {
 
 function saveDayFlags(key, flags) {
   localStorage.setItem(key, JSON.stringify(flags));
+  schedulePush();
 }
 
 // Work days have 1 meal slot, off days have 2.
@@ -641,7 +708,99 @@ travelForm.addEventListener('submit', (evt) => {
   renderTravel();
 });
 
-// ---- Init ----
-travelDate.value = todayStr();
-renderDaily();
-renderTravel();
+// ---- Auth gate ----
+const authGate = document.getElementById('authGate');
+const appRoot = document.getElementById('appRoot');
+const accountBar = document.getElementById('accountBar');
+const accountEmail = document.getElementById('accountEmail');
+const loginForm = document.getElementById('loginForm');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+const loginBtn = document.getElementById('loginBtn');
+const signupBtn = document.getElementById('signupBtn');
+const authMsg = document.getElementById('authMsg');
+const logoutBtn = document.getElementById('logoutBtn');
+
+let appStarted = false;
+
+function startApp() {
+  travelDate.value = todayStr();
+  renderDaily();
+  renderTravel();
+}
+
+function showApp(user) {
+  authGate.hidden = true;
+  appRoot.hidden = false;
+  accountBar.hidden = false;
+  accountEmail.textContent = user.email || '已登入';
+}
+
+function showLogin() {
+  authGate.hidden = false;
+  appRoot.hidden = true;
+  accountBar.hidden = true;
+}
+
+async function submitAuth(mode) {
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+  if (!email || !password) { authMsg.textContent = '請輸入 email 和密碼'; return; }
+  if (password.length < 6) { authMsg.textContent = '密碼至少 6 個字'; return; }
+  loginBtn.disabled = true;
+  signupBtn.disabled = true;
+  authMsg.textContent = mode === 'signup' ? '建立帳號中…' : '登入中…';
+  try {
+    const { data, error } = mode === 'signup'
+      ? await sb.auth.signUp({ email, password })
+      : await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      authMsg.textContent = `失敗：${error.message}`;
+    } else if (mode === 'signup' && !data.session) {
+      authMsg.textContent = '帳號已建立，但目前仍要求 email 驗證。請到 Supabase 關閉「Confirm email」後再登入。';
+    } else {
+      authMsg.textContent = '';
+    }
+    // On success, onAuthStateChange shows the app.
+  } catch (e) {
+    authMsg.textContent = `錯誤：${e && e.message ? e.message : e}`;
+  } finally {
+    loginBtn.disabled = false;
+    signupBtn.disabled = false;
+  }
+}
+
+loginForm.addEventListener('submit', (evt) => {
+  evt.preventDefault();
+  submitAuth('signin');
+});
+
+signupBtn.addEventListener('click', () => submitAuth('signup'));
+
+logoutBtn.addEventListener('click', () => sb.auth.signOut());
+
+sb.auth.onAuthStateChange((event, session) => {
+  // Clear local cache only on explicit logout, so a different account on the
+  // same browser can't inherit the previous user's data. (Not on a plain
+  // "no session" — that would wipe pre-login data before its first sync.)
+  if (event === 'SIGNED_OUT') {
+    CLOUD_KEYS.forEach((k) => localStorage.removeItem(k));
+  }
+
+  if (session && session.user) {
+    currentUser = session.user;
+    showApp(currentUser);
+    if (!appStarted) {
+      appStarted = true;
+      // Defer supabase calls out of the auth callback to avoid the SDK's lock.
+      setTimeout(async () => {
+        await hydrateFromCloud();
+        startApp();
+      }, 0);
+    }
+  } else {
+    currentUser = null;
+    appStarted = false;
+    showLogin();
+  }
+});
